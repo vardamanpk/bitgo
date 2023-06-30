@@ -45,11 +45,9 @@ Hint: cache the API responses locally to avoid hitting rate limits.
 
 To run the project
 
-   ```sh
-    npm run start
-    ```
-
-## Sample Output:
+   `npm run start`
+   
+## Sample Output
 
 `
 {
