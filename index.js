@@ -4,39 +4,26 @@ const BASE_URL = 'https://blockstream.info/api/'
 let blockHash, txnsCount;
 
 const txnAndInputsMap = new Map()
-const txnAndAncestryCountMap = new Map()
+const txnAndAncestryMap = new Map()
 
-function getAncestryCount(inputs, txid, set) {
-    const stack = [];
-    if(txnAndAncestryCountMap[txid]) {
-        return txnAndAncestryCountMap[txid];
-    }
-    if(!inputs)
-        return 0;
-    for(let i=0;i<inputs.length;i++) {
-        const input = inputs[i];
-        if(txnAndInputsMap.has(input)){
-            /*
-            A: [B, C],
-            C: [B]
-            A ancestry count should be 2, so using set here.
-            */
-            set.add(input)
-            stack.push(input)
+function buildAncestryForTxn(txid) {
+    function dfs(txnId) {
+        if(!txnAndAncestryMap.has(txid))
+            txnAndAncestryMap.set(txid, new Set())
+        const inputs = txnAndInputsMap.get(txnId) || [];
+        for(let i=0;i<inputs.length;i++) {
+            const input = inputs[i];
+            if(txnAndInputsMap.has(input)) {
+                txnAndAncestryMap.get(txid).add(input)
+            }
+            dfs(input);
         }
     }
-    while(stack.length>0) {
-        const txnId = stack.pop();
-        getAncestryCount(txnAndInputsMap[txnId], txnId, set)
-    }
-    console.log(`${txid}:${set.size}`)
-    txnAndAncestryCountMap.set(txid, set.size)
-    return set.size;
-
+    dfs(txid);
 }
 function buildtxnAndAncestryCountMap() {
     txnAndInputsMap.forEach((inputs, txid) => {
-        txnAndAncestryCountMap.set( txid, getAncestryCount(inputs, txid, new Set()) )
+        buildAncestryForTxn(txid)
     }) 
 }
 
@@ -67,8 +54,8 @@ async function getNumberOfTxnsInBlock(blockHash) {
     return data.tx_count
 }
 
-function getTopNTxnsWithLargestAncestrySet(txnAndAncestryCountMap, N = 10) {
-    const sortedTxns = new Map([...txnAndAncestryCountMap.entries()].sort((a, b) => b[1] - a[1]));
+function getTopNTxnsWithLargestAncestrySet(txnAndAncestryMap, N = 10) {
+    const sortedTxns = new Map([...txnAndAncestryMap.entries()].sort((a, b) => b[1].size - a[1].size));
     return new Map(Array.from(sortedTxns).slice(0, N))
 }
 
@@ -80,9 +67,11 @@ async function printTransactionsWithLargeAncestrySet() {
         buildtxnAndAncestryCountMap()
         console.log(blockHash)
         console.log(txnsCount)
-        console.log('output:', txnAndAncestryCountMap)
-        console.log(getTopNTxnsWithLargestAncestrySet(txnAndAncestryCountMap, 10))
-        console.log('Hello')
+        const output = getTopNTxnsWithLargestAncestrySet(txnAndAncestryMap, 10)
+        console.log('Output:')
+        for(let [txnId, ancestors] of  output) {
+            console.log(`${txnId} => ${ancestors.size}`)
+        }
     }
     catch(error) {
         console.log(error)
